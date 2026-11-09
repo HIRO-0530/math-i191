@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>変量y = ax + b の線形変換シミュレーター</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for data table */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+    <!-- Top Header -->
+    <header class="bg-indigo-700 text-white shadow-lg border-b border-indigo-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight flex items-center gap-2">
+                    <i class="fa-solid font-mono fa-chart-line text-indigo-300"></i>
+                    変量 $y = ax + b$ 線形変換シミュレーター
+                </h1>
+                <p class="text-indigo-200 text-sm mt-1">
+                    元の変量 $x$ （平均 $\bar{x} = <span id="headerMean">15</span>$, 分散 $s_x^2 = <span id="headerVar">18</span>$）が $a, b$ によってどう変化するかを可視化
+                </p>
+            </div>
+            <div class="flex flex-wrap gap-2 text-xs font-semibold">
+                <span id="badgeMean" class="bg-indigo-800/80 text-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-600/50">
+                    平均 $\bar{x} = 15$
+                </span>
+                <span id="badgeVar" class="bg-indigo-800/80 text-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-600/50">
+                    分散 $s_x^2 = 18$
+                </span>
+                <span id="badgeSd" class="bg-indigo-800/80 text-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-600/50">
+                    標準偏差 $s_x \approx 4.24$
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+        <!-- Grid Layout: Controls & Math (Left) + Charts (Right) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Control & Formulas Column (4 cols) -->
+            <div class="lg:col-span-5 space-y-6">
+
+                <!-- Parameter Controls Card -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center justify-between">
+                        <span><i class="fa-solid fa-sliders text-indigo-600 mr-2"></i>変換パラメーターの設定</span>
+                        <button id="resetParamsBtn" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded transition flex items-center gap-1">
+                            <i class="fa-solid fa-rotate-left"></i> リセット
+                        </button>
+                    </h2>
+
+                    <!-- Parameter a Slider & Input -->
+                    <div class="space-y-4 mb-6 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                        <div class="flex justify-between items-center">
+                            <label for="paramA" class="font-bold text-slate-700 text-sm flex items-center gap-1">
+                                <span class="bg-indigo-600 text-white w-6 h-6 rounded-full inline-flex items-center justify-center text-xs">a</span>
+                                傾き・倍率 ($a$)
+                            </label>
+                            <div class="flex items-center gap-1">
+                                <input type="number" id="inputA" value="1.0" step="0.1" min="-5" max="5" 
+                                    class="w-20 px-2 py-1 text-right text-sm font-bold border border-indigo-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            </div>
+                        </div>
+                        <input type="range" id="sliderA" min="-5" max="5" step="0.1" value="1" 
+                            class="w-full accent-indigo-600 cursor-pointer">
+                        <div class="flex justify-between text-xs text-slate-500">
+                            <span>-5.0 (反転・5倍)</span>
+                            <span>0 (定数化)</span>
+                            <span>5.0 (5倍)</span>
+                        </div>
+                    </div>
+
+                    <!-- Parameter b Slider & Input -->
+                    <div class="space-y-4 mb-6 bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                        <div class="flex justify-between items-center">
+                            <label for="paramB" class="font-bold text-slate-700 text-sm flex items-center gap-1">
+                                <span class="bg-emerald-600 text-white w-6 h-6 rounded-full inline-flex items-center justify-center text-xs">b</span>
+                                平行移動・切片 ($b$)
+                            </label>
+                            <div class="flex items-center gap-1">
+                                <input type="number" id="inputB" value="0" step="1" min="-50" max="50" 
+                                    class="w-20 px-2 py-1 text-right text-sm font-bold border border-emerald-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+                        </div>
+                        <input type="range" id="sliderB" min="-50" max="50" step="1" value="0" 
+                            class="w-full accent-emerald-600 cursor-pointer">
+                        <div class="flex justify-between text-xs text-slate-500">
+                            <span>-50 (左へ移動)</span>
+                            <span>0</span>
+                            <span>+50 (右へ移動)</span>
+                        </div>
+                    </div>
+
+                    <!-- Quick Preset Buttons -->
+                    <div class="space-y-2">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">プリセット例</span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button class="preset-btn bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 text-slate-700 text-xs py-2 px-3 rounded-lg border border-slate-200 text-left transition font-medium" data-a="1" data-b="0">
+                                <b>初期値</b>: $a=1, b=0$
+                            </button>
+                            <button class="preset-btn bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 text-slate-700 text-xs py-2 px-3 rounded-lg border border-slate-200 text-left transition font-medium" data-a="-1" data-b="30">
+                                <b>左右反転</b>: $a=-1, b=30$
+                            </button>
+                            <button class="preset-btn bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 text-slate-700 text-xs py-2 px-3 rounded-lg border border-slate-200 text-left transition font-medium" data-a="2" data-b="-10">
+                                <b>2倍拡大+移動</b>: $a=2, b=-10$
+                            </button>
+                            <button id="standardizeBtn" class="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs py-2 px-3 rounded-lg text-left transition font-medium">
+                                <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> <b>標準化 (Mean 0, Var 1)</b>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sample Data Generation Options Card -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center justify-between">
+                        <span><i class="fa-solid fa-dice text-indigo-600 mr-2"></i>標本データ生成設定</span>
+                    </h2>
+
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4 mb-2">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1">元の平均値 ($\bar{x}$)</label>
+                                <input type="number" id="inputMeanX" value="15" step="1" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1">元の分散 ($s_x^2$)</label>
+                                <input type="number" id="inputVarX" value="18" step="1" min="0.1" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1">サンプルサイズ ($N$)</label>
+                                <select id="sampleSizeSelect" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500">
+                                    <option value="50">50件</option>
+                                    <option value="100">100件</option>
+                                    <option value="250">250件</option>
+                                    <option value="500">500件</option>
+                                    <option value="1000" selected>1000件</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1">分布の形状</label>
+                                <select id="distTypeSelect" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500">
+                                    <option value="normal" selected>正規分布型</option>
+                                    <option value="bimodal">二峰性 (山が2つ)</option>
+                                    <option value="uniform">一様分布型</option>
+                                    <option value="skewed">右裾が長い分布</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 pt-1">
+                            <input type="checkbox" id="exactNormCheck" checked class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500">
+                            <label for="exactNormCheck" class="text-xs text-slate-700 cursor-pointer">
+                                標本平均・分散を厳密に <b id="lblExactMean">15.00</b> と <b id="lblExactVar">18.00</b> に標準補正する
+                            </label>
+                        </div>
+
+                        <button id="regenerateBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm py-2.5 rounded-xl transition shadow flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-arrows-rotate"></i> 新しいデータを再生成
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mathematical Formulas & Live Calculation Card -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-calculator text-indigo-600 mr-2"></i> 理論値の計算式
+                    </h2>
+
+                    <!-- Mean Formula -->
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <div class="text-xs text-slate-500 font-semibold mb-1">1. 平均値 $\bar{y}$ の変換公式</div>
+                        <div class="font-mono text-sm text-slate-800">
+                            $\bar{y} = a \bar{x} + b$
+                        </div>
+                        <div id="calcMeanFormula" class="text-xs text-indigo-700 font-semibold mt-1 font-mono">
+                            <!-- Calculated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Variance Formula -->
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <div class="text-xs text-slate-500 font-semibold mb-1">2. 分散 $s_y^2$ の変換公式</div>
+                        <div class="font-mono text-sm text-slate-800">
+                            $s_y^2 = a^2 s_x^2$ &nbsp;<span class="text-xs text-slate-500 font-normal">(定数 $b$ は影響しない)</span>
+                        </div>
+                        <div id="calcVarFormula" class="text-xs text-indigo-700 font-semibold mt-1 font-mono">
+                            <!-- Calculated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Standard Deviation Formula -->
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <div class="text-xs text-slate-500 font-semibold mb-1">3. 標準偏差 $s_y$ の変換公式</div>
+                        <div class="font-mono text-sm text-slate-800">
+                            $s_y = |a| s_x$
+                        </div>
+                        <div id="calcSdFormula" class="text-xs text-indigo-700 font-semibold mt-1 font-mono">
+                            <!-- Calculated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Visualization & Results Column (7 cols) -->
+            <div class="lg:col-span-7 space-y-6">
+
+                <!-- Statistics Summary Cards -->
+                <div class="grid grid-cols-3 gap-3 sm:gap-4">
+                    <!-- Mean Card -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-2 h-full bg-indigo-500"></div>
+                        <div class="text-xs text-slate-500 font-semibold">平均値 (Mean)</div>
+                        <div class="mt-1 flex items-baseline justify-between">
+                            <span class="text-xs text-slate-400">$\bar{x} \to \bar{y}$</span>
+                        </div>
+                        <div id="statMeanY" class="text-xl sm:text-2xl font-bold text-slate-900 mt-1">15.00</div>
+                        <div id="statMeanSample" class="text-[11px] text-indigo-600 mt-1 font-medium">実測標本: 15.00</div>
+                    </div>
+
+                    <!-- Variance Card -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-2 h-full bg-emerald-500"></div>
+                        <div class="text-xs text-slate-500 font-semibold">分散 (Variance)</div>
+                        <div class="mt-1 flex items-baseline justify-between">
+                            <span class="text-xs text-slate-400">$s_x^2 \to s_y^2$</span>
+                        </div>
+                        <div id="statVarY" class="text-xl sm:text-2xl font-bold text-slate-900 mt-1">18.00</div>
+                        <div id="statVarSample" class="text-[11px] text-emerald-600 mt-1 font-medium">実測標本: 18.00</div>
+                    </div>
+
+                    <!-- Std Dev Card -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-2 h-full bg-amber-500"></div>
+                        <div class="text-xs text-slate-500 font-semibold">標準偏差 (SD)</div>
+                        <div class="mt-1 flex items-baseline justify-between">
+                            <span class="text-xs text-slate-400">$s_x \to s_y$</span>
+                        </div>
+                        <div id="statSdY" class="text-xl sm:text-2xl font-bold text-slate-900 mt-1">4.24</div>
+                        <div id="statSdSample" class="text-[11px] text-amber-600 mt-1 font-medium">実測標本: 4.24</div>
+                    </div>
+                </div>
+
+                <!-- Charts Container with Tabs -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <!-- Tab Header -->
+                    <div class="flex flex-wrap items-center justify-between border-b border-slate-200 pb-3 mb-4 gap-2">
+                        <div class="flex gap-2">
+                            <button id="tabBtnHistogram" class="tab-btn bg-indigo-50 text-indigo-700 font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-lg transition border border-indigo-200">
+                                <i class="fa-solid fa-chart-column mr-1.5"></i>度数分布 (ヒストグラム)
+                            </button>
+                            <button id="tabBtnScatter" class="tab-btn text-slate-600 hover:bg-slate-100 font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-lg transition border border-transparent">
+                                <i class="fa-solid fa-chart-scatter mr-1.5"></i>一次関数 $y = ax + b$ 散布図
+                            </button>
+                        </div>
+                        <div id="histogramSyncToggle" class="flex items-center gap-1.5">
+                            <input type="checkbox" id="syncAxisCheck" class="w-3.5 h-3.5 text-indigo-600 rounded">
+                            <label for="syncAxisCheck" class="text-xs text-slate-600 cursor-pointer">X軸の表示範囲を固定化</label>
+                        </div>
+                    </div>
+
+                    <!-- Tab View 1: Histogram Canvas -->
+                    <div id="viewHistogram" class="w-full relative h-[320px] sm:h-[380px]">
+                        <canvas id="histogramChart"></canvas>
+                    </div>
+
+                    <!-- Tab View 2: Scatter Canvas (hidden initially) -->
+                    <div id="viewScatter" class="w-full relative h-[320px] sm:h-[380px] hidden">
+                        <canvas id="scatterChart"></canvas>
+                    </div>
+
+                    <div class="mt-3 text-xs text-slate-500 flex items-center justify-between">
+                        <span id="chartNote"><i class="fa-solid fa-circle-info mr-1"></i> 青色が元の変量 $x$、緑色が変換後の変量 $y$ です。</span>
+                    </div>
+                </div>
+
+                <!-- Quick Property Summary Box -->
+                <div class="bg-indigo-900 text-white rounded-2xl p-5 shadow-sm space-y-2">
+                    <h3 class="font-bold text-sm text-indigo-200 flex items-center gap-2">
+                        <i class="fa-solid fa-lightbulb text-amber-400"></i> 変量変換 $y = ax + b$ の要点まとめ
+                    </h3>
+                    <ul class="text-xs text-indigo-100 space-y-1.5 list-disc pl-4 leading-relaxed">
+                        <li><b>平行移動 ($b$)</b>: 全データに $b$ を加えると、平均値も同じく $+b$ ズレますが、データの「散らばり具合（分散・標準偏差）」は変化しません。</li>
+                        <li><b>拡大・縮小・反転 ($a$)</b>: データ全体を $a$ 倍すると、平均値は $a$ 倍に、標準偏差は $|a|$ 倍に、分散は <b>$a^2$ 倍</b> に変化します。</li>
+                        <li><b>標準化 (Standardization)</b>: $a = \frac{1}{s_x} \approx 0.2357$, $b = -\frac{\bar{x}}{s_x} \approx -3.5355$ に設定すると、平均 0, 分散 1 の標準データに変形できます。</li>
+                    </ul>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Bottom Data Table Section -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-indigo-600"></i> サンプルデータ一覧 ($N = <span id="tableNCount">100</span>$)
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">変換計算過程: $y_i = a \times x_i + b$</p>
+                </div>
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <div class="relative flex-1 sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+                        <input type="text" id="tableSearchInput" placeholder="値で検索..." class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <button id="downloadCsvBtn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 transition flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-file-csv text-emerald-600"></i> CSV保存
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="overflow-x-auto border border-slate-200 rounded-xl max-h-80 overflow-y-auto">
+                <table class="w-full text-xs text-left border-collapse">
+                    <thead class="bg-slate-100 sticky top-0 text-slate-700 font-bold border-b border-slate-200">
+                        <tr>
+                            <th class="py-2.5 px-4 w-16 text-center">No.</th>
+                            <th class="py-2.5 px-4 bg-indigo-50/70 text-indigo-900">元の変量 $x_i$</th>
+                            <th class="py-2.5 px-4">a × $x_i$ (倍率計算)</th>
+                            <th class="py-2.5 px-4">+ b (平行移動)</th>
+                            <th class="py-2.5 px-4 bg-emerald-50/70 text-emerald-900 font-bold">変換後の変量 $y_i$</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="divide-y divide-slate-100 font-mono">
+                        <!-- Rendered by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-2 text-right text-[11px] text-slate-400">
+                ※ 先頭100件を表示中（全データはCSVでダウンロードできます）
+            </div>
+        </div>
+
+    </main>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Data State
+        let sampleXData = [];
+        let sampleYData = [];
+        let sampleSize = 1000;
+        let activeTab = 'histogram'; // 'histogram' or 'scatter'
+
+        // Theoretical Constant Specs for X
+        let targetMeanX = 15.0;
+        let targetVarX = 18.0;
+        let targetSdX = Math.sqrt(targetVarX); // ~4.24264
+
+        // DOM Elements
+        const sliderA = document.getElementById('sliderA');
+        const inputA = document.getElementById('inputA');
+        const sliderB = document.getElementById('sliderB');
+        const inputB = document.getElementById('inputB');
+
+        const calcMeanFormula = document.getElementById('calcMeanFormula');
+        const calcVarFormula = document.getElementById('calcVarFormula');
+        const calcSdFormula = document.getElementById('calcSdFormula');
+
+        const statMeanY = document.getElementById('statMeanY');
+        const statVarY = document.getElementById('statVarY');
+        const statSdY = document.getElementById('statSdY');
+
+        const statMeanSample = document.getElementById('statMeanSample');
+        const statVarSample = document.getElementById('statVarSample');
+        const statSdSample = document.getElementById('statSdSample');
+
+        const sampleSizeSelect = document.getElementById('sampleSizeSelect');
+        const distTypeSelect = document.getElementById('distTypeSelect');
+        const exactNormCheck = document.getElementById('exactNormCheck');
+        const syncAxisCheck = document.getElementById('syncAxisCheck');
+        const inputMeanX = document.getElementById('inputMeanX');
+        const inputVarX = document.getElementById('inputVarX');
+
+        // Charts handles
+        let histogramChart = null;
+        let scatterChart = null;
+
+        // Update Base Parameters from UI
+        function updateBaseParams() {
+            targetMeanX = parseFloat(inputMeanX.value);
+            if (isNaN(targetMeanX)) targetMeanX = 0;
+            targetVarX = parseFloat(inputVarX.value);
+            if (isNaN(targetVarX) || targetVarX <= 0) targetVarX = 1.0; // 分散は0より大きい値
+            targetSdX = Math.sqrt(targetVarX);
+
+            // ヘッダーやバッジのテキストを更新
+            document.getElementById('headerMean').innerText = targetMeanX.toFixed(1);
+            document.getElementById('headerVar').innerText = targetVarX.toFixed(1);
+            
+            document.getElementById('badgeMean').innerHTML = `平均 $\\bar{x} = ${targetMeanX.toFixed(1)}$`;
+            document.getElementById('badgeVar').innerHTML = `分散 $s_x^2 = ${targetVarX.toFixed(1)}$`;
+            document.getElementById('badgeSd').innerHTML = `標準偏差 $s_x \\approx ${targetSdX.toFixed(2)}$`;
+
+            document.getElementById('lblExactMean').innerText = targetMeanX.toFixed(2);
+            document.getElementById('lblExactVar').innerText = targetVarX.toFixed(2);
+        }
+
+        // Box-Muller transform for normal random numbers
+        function generateGaussian() {
+            let u = 0, v = 0;
+            while (u === 0) u = Math.random();
+            while (v === 0) v = Math.random();
+            return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        }
+
+        // Generate Sample Data X according to settings
+        function generateDataX() {
+            const size = parseInt(sampleSizeSelect.value, 10);
+            sampleSize = size;
+            const distType = distTypeSelect.value;
+            const forceExact = exactNormCheck.checked;
+
+            let raw = [];
+            for (let i = 0; i < size; i++) {
+                let val = 0;
+                if (distType === 'normal') {
+                    val = generateGaussian();
+                } else if (distType === 'bimodal') {
+                    const coin = Math.random() < 0.5;
+                    val = coin ? (generateGaussian() - 1.8) : (generateGaussian() + 1.8);
+                } else if (distType === 'uniform') {
+                    val = (Math.random() - 0.5) * Math.sqrt(12);
+                } else if (distType === 'skewed') {
+                    // Exponential shape approximation
+                    const expVal = -Math.log(1 - Math.random());
+                    val = expVal - 1;
+                }
+                raw.push(val);
+            }
+
+            // Calculate sample mean and variance of raw data
+            const meanRaw = raw.reduce((a, b) => a + b, 0) / size;
+            const varRaw = raw.reduce((a, b) => a + Math.pow(b - meanRaw, 2), 0) / (size > 1 ? (size - 1) : 1);
+            const sdRaw = Math.sqrt(varRaw) || 1;
+
+            if (forceExact) {
+                // Normalize so sample mean is exactly targetMeanX and sample variance is exactly targetVarX
+                sampleXData = raw.map(v => targetMeanX + ((v - meanRaw) / sdRaw) * targetSdX);
+            } else {
+                // Approximate scaling
+                sampleXData = raw.map(v => targetMeanX + v * targetSdX);
+            }
+        }
+
+        // Calculate Y = a * X + b
+        function calculateYData() {
+            const a = parseFloat(inputA.value) || 0;
+            const b = parseFloat(inputB.value) || 0;
+            sampleYData = sampleXData.map(x => a * x + b);
+        }
+
+        // Compute basic sample stats
+        function computeStats(arr) {
+            const n = arr.length;
+            if (n === 0) return { mean: 0, var: 0, sd: 0 };
+            const mean = arr.reduce((acc, val) => acc + val, 0) / n;
+            const variance = arr.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / (n > 1 ? (n - 1) : 1);
+            const sd = Math.sqrt(variance);
+            return { mean, var: variance, sd };
+        }
+
+        // Synchronize inputs & sliders
+        function syncInputs(source) {
+            if (source === 'sliderA') inputA.value = sliderA.value;
+            if (source === 'inputA') sliderA.value = inputA.value;
+            if (source === 'sliderB') inputB.value = sliderB.value;
+            if (source === 'inputB') sliderB.value = inputB.value;
+
+            updateAll();
+        }
+
+        // Main Update Procedure
+        function updateAll() {
+            calculateYData();
+
+            const a = parseFloat(inputA.value) || 0;
+            const b = parseFloat(inputB.value) || 0;
+
+            // Theoretical values
+            const theoMeanY = a * targetMeanX + b;
+            const theoVarY = Math.pow(a, 2) * targetVarX;
+            const theoSdY = Math.abs(a) * targetSdX;
+
+            // Update Formulas display
+            calcMeanFormula.innerHTML = `$\\bar{y} = (${a.toFixed(1)}) \\times ${targetMeanX.toFixed(1)} + (${b.toFixed(0)}) = \\mathbf{${theoMeanY.toFixed(2)}}$`;
+            calcVarFormula.innerHTML = `$s_y^2 = (${a.toFixed(1)})^2 \\times ${targetVarX.toFixed(1)} = ${ (a*a).toFixed(2) } \\times ${targetVarX.toFixed(1)} = \\mathbf{${theoVarY.toFixed(2)}}$`;
+            calcSdFormula.innerHTML = `$s_y = |${a.toFixed(1)}| \\times ${targetSdX.toFixed(4)} = \\mathbf{${theoSdY.toFixed(2)}}$`;
+
+            // Update Theoretical stat cards
+            statMeanY.innerText = theoMeanY.toFixed(2);
+            statVarY.innerText = theoVarY.toFixed(2);
+            statSdY.innerText = theoSdY.toFixed(2);
+
+            // Calculate actual sample stats
+            const statsX = computeStats(sampleXData);
+            const statsY = computeStats(sampleYData);
+
+            statMeanSample.innerText = `標本値: ${statsY.mean.toFixed(2)} (x: ${statsX.mean.toFixed(2)})`;
+            statVarSample.innerText = `標本値: ${statsY.var.toFixed(2)} (x: ${statsX.var.toFixed(2)})`;
+            statSdSample.innerText = `標本値: ${statsY.sd.toFixed(2)} (x: ${statsX.sd.toFixed(2)})`;
+
+            // Render math if MathJax is present or format nicely
+            if (window.MathJax) {
+                MathJax.typesetPromise();
+            }
+
+            // Update Active Chart & Table
+            updateCharts();
+            renderTable();
+        }
+
+        // Histogram Binning Logic
+        function buildHistogramBins(data, minVal, maxVal, numBins = 25) {
+            const step = (maxVal - minVal) / numBins || 1;
+            const counts = new Array(numBins).fill(0);
+            const labels = [];
+
+            for (let i = 0; i < numBins; i++) {
+                const low = minVal + i * step;
+                labels.push(low.toFixed(1));
+            }
+
+            data.forEach(val => {
+                let idx = Math.floor((val - minVal) / step);
+                if (idx < 0) idx = 0;
+                if (idx >= numBins) idx = numBins - 1;
+                counts[idx]++;
+            });
+
+            return { labels, counts };
+        }
+
+        // Chart Initialization and Update
+        function initCharts() {
+            // Histogram Chart Setup
+            const ctxH = document.getElementById('histogramChart').getContext('2d');
+            histogramChart = new Chart(ctxH, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: '元の変量 x (Mean 15, Var 18)',
+                            data: [],
+                            backgroundColor: 'rgba(99, 102, 241, 0.45)',
+                            borderColor: 'rgb(79, 70, 229)',
+                            borderWidth: 1.5,
+                            barPercentage: 0.9,
+                            categoryPercentage: 0.9,
+                        },
+                        {
+                            label: '変換後の変量 y = ax + b',
+                            data: [],
+                            backgroundColor: 'rgba(16, 185, 129, 0.45)',
+                            borderColor: 'rgb(5, 150, 105)',
+                            borderWidth: 1.5,
+                            barPercentage: 0.9,
+                            categoryPercentage: 0.9,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 250 },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => `階級中央値: ${items[0].label}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '値 (Value)' },
+                            grid: { color: 'rgba(0,0,0,0.04)' }
+                        },
+                        y: {
+                            title: { display: true, text: '度数 (Frequency)' },
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.04)' }
+                        }
+                    }
+                }
+            });
+
+            // Scatter Plot Setup
+            const ctxS = document.getElementById('scatterChart').getContext('2d');
+            scatterChart = new Chart(ctxS, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'データ点 (x_i, y_i)',
+                            data: [],
+                            backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                            borderColor: 'rgb(67, 56, 202)',
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            type: 'line',
+                            label: '変換直線 y = ax + b',
+                            data: [],
+                            borderColor: 'rgb(239, 68, 68)',
+                            borderWidth: 2.5,
+                            pointRadius: 0,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 200 },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    if (ctx.datasetIndex === 0) {
+                                        return `x = ${ctx.parsed.x.toFixed(2)}, y = ${ctx.parsed.y.toFixed(2)}`;
+                                    }
+                                    return `y = ax + b`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '元の変量 x' },
+                            grid: { color: 'rgba(0,0,0,0.04)' }
+                        },
+                        y: {
+                            title: { display: true, text: '変換後の変量 y' },
+                            grid: { color: 'rgba(0,0,0,0.04)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateCharts() {
+            if (!histogramChart || !scatterChart) return;
+
+            // Update Chart Label
+            histogramChart.data.datasets[0].label = `元の変量 x (Mean ${targetMeanX.toFixed(1)}, Var ${targetVarX.toFixed(1)})`;
+
+            // 1. Update Histogram
+            const minX = Math.min(...sampleXData);
+            const maxX = Math.max(...sampleXData);
+            const minY = Math.min(...sampleYData);
+            const maxY = Math.max(...sampleYData);
+
+            let globalMin = Math.min(minX, minY);
+            let globalMax = Math.max(maxX, maxY);
+
+            if (syncAxisCheck.checked) {
+                // Keep scale wide enough
+                globalMin = Math.min(-30, globalMin);
+                globalMax = Math.max(60, globalMax);
+            }
+
+            const numBins = 24;
+            const histX = buildHistogramBins(sampleXData, globalMin, globalMax, numBins);
+            const histY = buildHistogramBins(sampleYData, globalMin, globalMax, numBins);
+
+            histogramChart.data.labels = histX.labels;
+            histogramChart.data.datasets[0].data = histX.counts;
+            histogramChart.data.datasets[1].data = histY.counts;
+            histogramChart.update();
+
+            // 2. Update Scatter Plot
+            const scatterPoints = sampleXData.map((x, i) => ({ x: x, y: sampleYData[i] }));
+            const a = parseFloat(inputA.value) || 0;
+            const b = parseFloat(inputB.value) || 0;
+
+            const lineMinX = Math.min(0, minX - 5);
+            const lineMaxX = Math.max(30, maxX + 5);
+            const linePoints = [
+                { x: lineMinX, y: a * lineMinX + b },
+                { x: lineMaxX, y: a * lineMaxX + b }
+            ];
+
+            scatterChart.data.datasets[0].data = scatterPoints;
+            scatterChart.data.datasets[1].data = linePoints;
+            scatterChart.update();
+        }
+
+        // Table Render Logic
+        function renderTable() {
+            const tbody = document.getElementById('dataTableBody');
+            const searchVal = document.getElementById('tableSearchInput').value.trim().toLowerCase();
+            const a = parseFloat(inputA.value) || 0;
+            const b = parseFloat(inputB.value) || 0;
+
+            document.getElementById('tableNCount').innerText = sampleXData.length;
+
+            let html = '';
+            const maxRows = Math.min(sampleXData.length, 100); // Display top 100 for DOM speed
+
+            let rendered = 0;
+            for (let i = 0; i < sampleXData.length; i++) {
+                if (rendered >= maxRows) break;
+
+                const xVal = sampleXData[i];
+                const axVal = a * xVal;
+                const yVal = sampleYData[i];
+
+                const strCheck = `${i+1} ${xVal.toFixed(2)} ${yVal.toFixed(2)}`;
+                if (searchVal && !strCheck.includes(searchVal)) continue;
+
+                html += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-2 px-4 text-center font-sans text-slate-400">${i + 1}</td>
+                        <td class="py-2 px-4 font-bold text-indigo-700 bg-indigo-50/30">${xVal.toFixed(2)}</td>
+                        <td class="py-2 px-4 text-slate-600">${axVal.toFixed(2)}</td>
+                        <td class="py-2 px-4 text-slate-600">${b >= 0 ? '+' + b : b}</td>
+                        <td class="py-2 px-4 font-bold text-emerald-700 bg-emerald-50/30">${yVal.toFixed(2)}</td>
+                    </tr>
+                `;
+                rendered++;
+            }
+
+            if (html === '') {
+                html = `<tr><td colspan="5" class="text-center py-4 text-slate-400">該当するデータが見つかりません</td></tr>`;
+            }
+
+            tbody.innerHTML = html;
+        }
+
+        // CSV Export Helper
+        function exportCSV() {
+            const a = parseFloat(inputA.value) || 0;
+            const b = parseFloat(inputB.value) || 0;
+
+            let csvContent = "data:text/csv;charset=utf-8,Index,x,a_times_x,b,y\n";
+            sampleXData.forEach((x, i) => {
+                const ax = a * x;
+                const y = sampleYData[i];
+                csvContent += `${i + 1},${x.toFixed(4)},${ax.toFixed(4)},${b},${y.toFixed(4)}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `linear_transformation_a${a}_b${b}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Event Listeners Registration
+        function setupEventListeners() {
+            // Slider & Input Sync
+            sliderA.addEventListener('input', () => syncInputs('sliderA'));
+            inputA.addEventListener('input', () => syncInputs('inputA'));
+            sliderB.addEventListener('input', () => syncInputs('sliderB'));
+            inputB.addEventListener('input', () => syncInputs('inputB'));
+
+            // Reset Button
+            document.getElementById('resetParamsBtn').addEventListener('click', () => {
+                inputA.value = 1.0;
+                sliderA.value = 1.0;
+                inputB.value = 0;
+                sliderB.value = 0;
+                updateAll();
+            });
+
+            // Presets
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const target = e.currentTarget;
+                    const aVal = target.getAttribute('data-a');
+                    const bVal = target.getAttribute('data-b');
+                    inputA.value = aVal;
+                    sliderA.value = aVal;
+                    inputB.value = bVal;
+                    sliderB.value = bVal;
+                    updateAll();
+                });
+            });
+
+            // Standardization Preset
+            document.getElementById('standardizeBtn').addEventListener('click', () => {
+                // Standardization: a = 1 / s_x, b = - mean / s_x
+                const stdA = (1 / targetSdX).toFixed(3);
+                const stdB = (-targetMeanX / targetSdX).toFixed(3);
+
+                inputA.value = stdA;
+                sliderA.value = stdA;
+                inputB.value = stdB;
+                sliderB.value = stdB;
+                updateAll();
+            });
+
+            // Base Parameters Event Listeners
+            inputMeanX.addEventListener('change', () => {
+                updateBaseParams();
+                generateDataX();
+                updateAll();
+            });
+            inputVarX.addEventListener('change', () => {
+                updateBaseParams();
+                generateDataX();
+                updateAll();
+            });
+
+            // Data Generation controls
+            document.getElementById('regenerateBtn').addEventListener('click', () => {
+                generateDataX();
+                updateAll();
+            });
+
+            sampleSizeSelect.addEventListener('change', () => {
+                generateDataX();
+                updateAll();
+            });
+
+            distTypeSelect.addEventListener('change', () => {
+                generateDataX();
+                updateAll();
+            });
+
+            exactNormCheck.addEventListener('change', () => {
+                generateDataX();
+                updateAll();
+            });
+
+            syncAxisCheck.addEventListener('change', updateAll);
+
+            // Table Search
+            document.getElementById('tableSearchInput').addEventListener('input', renderTable);
+
+            // Download CSV
+            document.getElementById('downloadCsvBtn').addEventListener('click', exportCSV);
+
+            // Tab Switching
+            const tabBtnHistogram = document.getElementById('tabBtnHistogram');
+            const tabBtnScatter = document.getElementById('tabBtnScatter');
+            const viewHistogram = document.getElementById('viewHistogram');
+            const viewScatter = document.getElementById('viewScatter');
+            const histogramSyncToggle = document.getElementById('histogramSyncToggle');
+
+            tabBtnHistogram.addEventListener('click', () => {
+                activeTab = 'histogram';
+                tabBtnHistogram.className = 'tab-btn bg-indigo-50 text-indigo-700 font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-lg transition border border-indigo-200';
+                tabBtnScatter.className = 'tab-btn text-slate-600 hover:bg-slate-100 font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-lg transition border border-transparent';
+                viewHistogram.classList.remove('hidden');
+                viewScatter.classList.add('hidden');
+                histogramSyncToggle.classList.remove('hidden');
+                updateCharts();
+            });
+
+            tabBtnScatter.addEventListener('click', () => {
+                activeTab = 'scatter';
+                tabBtnScatter.className = 'tab-btn bg-indigo-50 text-indigo-700 font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-lg transition border border-indigo-200';
+                tabBtnHistogram.className = 'tab-btn text-slate-600 hover:bg-slate-100 font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-lg transition border border-transparent';
+                viewScatter.classList.remove('hidden');
+                viewHistogram.classList.add('hidden');
+                histogramSyncToggle.classList.add('hidden');
+                updateCharts();
+            });
+        }
+
+        // Window Load Handler
+        window.onload = function() {
+            updateBaseParams();
+            initCharts();
+            generateDataX();
+            setupEventListeners();
+            updateAll();
+        };
+    </script>
+</body>
+</html>
